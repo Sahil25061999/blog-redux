@@ -1,11 +1,24 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  nanoid,
+} from "@reduxjs/toolkit";
 import axios from "axios";
 import { RootState } from "./store";
+
+export interface Post {
+  id: number | string;
+  title: string;
+  body: string;
+  emoticons: Record<string, number>;
+  createdAt: string;
+}
 
 interface PostState {
   status: "idle" | "pending" | "rejected";
   error: string;
-  posts: Array<{ id: number; title: string }>;
+  posts: Array<Post>;
 }
 
 const initialState: PostState = {
@@ -29,8 +42,30 @@ export const postSlice = createSlice({
   name: "posts",
   initialState,
   reducers: {
-    addPost: (state, action) => {
-      state.posts.push(action.payload);
+    addPost: {
+      reducer: (state, action: PayloadAction<Post>) => {
+        state.posts.unshift(action.payload);
+      },
+      prepare: (title: string, body: string): { payload: Post } => {
+        return {
+          payload: {
+            id: nanoid(),
+            title,
+            body,
+            emoticons: {
+              "❤️": 0,
+              "👍": 0,
+              "⭐": 0,
+            },
+            createdAt: new Date().toISOString(),
+          },
+        };
+      },
+    },
+    updateVotes: (state, action) => {
+      console.log(action.payload.id);
+      const post = state.posts.find((item) => item.id === action.payload.id)!;
+      post.emoticons[`${action.payload.emoji}`] += 1;
     },
   },
   extraReducers: (builder) => {
@@ -44,11 +79,22 @@ export const postSlice = createSlice({
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
         state.status = "idle";
-        state.posts = [...action.payload];
+        const loadedPost = action.payload
+          .map((item: Post) => {
+            item.createdAt = new Date().toISOString();
+            item.emoticons = {
+              "❤️": 0,
+              "👍": 0,
+              "⭐": 0,
+            };
+            return item;
+          })
+          .sort((a: Post, b: Post) => b.createdAt.localeCompare(a.createdAt));
+        state.posts = loadedPost;
       });
   },
 });
 
 export const getAllPosts = (state: RootState) => state.posts.posts;
-export const { addPost } = postSlice.actions;
+export const { addPost, updateVotes } = postSlice.actions;
 export default postSlice.reducer;
